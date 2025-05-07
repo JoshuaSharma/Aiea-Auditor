@@ -67,8 +67,9 @@ else:
         #print(result)
 
         
-        
+    
     else:
+        #Constraint Optimization
         pass
 
 '''response2 = client.chat.completions.create(

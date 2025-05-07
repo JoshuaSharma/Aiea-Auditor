@@ -1,11 +1,13 @@
 % Facts
-conducts_electricity(metal).
-not(conducts_electricity(insulator)).
-is_metal(iron).
+conducts(metal, electricity).
+not(conducts(insulator, electricity)).
+
+% Rules
+metal(X) :- made_of(X, iron).
+conducts(X, electricity) :- metal(X).
+
+% Specific facts
 made_of(nails, iron).
 
-% Rule
-conducts_electricity(X) :- made_of(X, Material), is_metal(Material), conducts_electricity(metal).
-
-% Query if nails conduct electricity
-query :- conducts_electricity(nails).
+% Query
+query(nails_conducts_electricity) :- conducts(nails, electricity).
