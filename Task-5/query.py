@@ -60,10 +60,10 @@ else:
 
         result = list(prolog.query(query))
         if result[0] == {}:
-            print ("true.")
+            print ("false.")
             
         else:
-            print ("false")
+            print ("true")
         #print(result)
 
         
