@@ -59,11 +59,10 @@ else:
         
 
         result = list(prolog.query(query))
-        if result[0] == {}:
-            print ("false.")
-            
+        if len(result) == 0:
+                print("true.")  # Empty result means the statement is true
         else:
-            print ("true")
+                print("false.")
         #print(result)
 
         
