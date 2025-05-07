@@ -1,15 +1,20 @@
+:- dynamic conducts_electricity/1.
+:- dynamic made_of/2.
+:- dynamic material_type/2.
+
 % Facts
-conducts_electricity(metal).
-does_not_conduct_electricity(insulator).
-made_of(iron, metal).
-made_of(nail, iron).
+material_type(metal, conducts_electricity).
+material_type(insulator, does_not_conduct_electricity).
+material_type(iron, metal).
+made_of(nails, iron).
 
 % Rules
-conducts_electricity(Object) :- made_of(Object, Material), conducts_electricity(Material).
+conducts_electricity(X) :-
+    made_of(X, Material),
+    material_type(Material, Type),
+    Type == conducts_electricity.
 
-% Query
-% To check if nails cannot conduct electricity, we negate the conducts_electricity predicate.
-% Answer the query: does_not_conduct_electricity(nail) or conduct_electricity(nail).
-
-% The statement "Nails cannot conduct electricity." is false because nails are made of iron,
-% and iron is a metal, and metals conduct electricity.
+does_not_conduct_electricity(X) :-
+    made_of(X, Material),
+    material_type(Material, Type),
+    Type == does_not_conduct_electricity.
