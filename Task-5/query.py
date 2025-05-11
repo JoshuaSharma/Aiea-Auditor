@@ -70,7 +70,40 @@ else:
     
     else:
         #Constraint Optimization
-        pass
+        response2 = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system", 
+                    "content": "You are a helpful assistant that solves ranking puzzles using constraint logic reasoning. "
+                            "Output the ranking logic constraints and final assignments as Python dictionaries or structured text."
+                },
+                {
+                    "role": "user", 
+                    "content": f"Solve this constraint ranking problem and state which option is correct: {question}"
+                }
+            ]
+        )
+    
+        reasoning = response2.choices[0].message.content
+        print(reasoning)
+
+        response3 = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "From the reasoning below, output only the correct multiple choice answer (e.g., 'A'):\n"
+                },
+                {
+                    "role": "user",
+                    "content": reasoning
+                }
+            ]
+        )
+        
+        answer = response3.choices[0].message.content.strip()
+        print(answer)
 
 '''response2 = client.chat.completions.create(
     model="gpt-4o",
