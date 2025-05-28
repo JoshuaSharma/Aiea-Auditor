@@ -44,7 +44,7 @@ if classification == "true":
 
     # Generate query
     query_prompt = PromptTemplate.from_template(
-        "Write a Prolog query (only the query line) to answer this question: {question} based on this knowledge base: {kb}"
+        "Output only a valid Prolog query (just one line) that can be answered from this knowledge base. Use only the actual predicates like 'fish/1', 'mammal/1', etc., defined in the knowledge base. Do not invent new predicates.\n\nQuestion: {question}\n\nKnowledge base: {kb}"
     )
     query_response = llm.invoke(query_prompt.format(question=question, kb=facts)).content
     query = extract_code(query_response).strip()
