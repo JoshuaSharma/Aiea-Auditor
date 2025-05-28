@@ -32,6 +32,8 @@ mammal(garfield).
 mammal(scooby).
 mammal(pluto).
 mammal(tiger1).
+% Rule 7: All elephants are mammals
+mammal(X) :- elephant(X).
 
 fish(nemo).
 fish(sharky).
@@ -50,6 +52,7 @@ is_animal(X) :- reptile(X).
 is_animal(X) :- amphibian(X).
 is_animal(X) :- elephant(X).
 
+
 % Rule 2: Penguins are birds that cannot fly
 penguin(X) :- bird(X), \+ can_fly(X).
 
@@ -66,5 +69,4 @@ can_walk(X) :- mammal(X).
 % Rule 6: Fish can swim
 can_swim(X) :- fish(X).
 
-% Rule 7: All elephants are mammals
-mammal(X) :- elephant(X).
+
