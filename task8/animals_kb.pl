@@ -35,7 +35,7 @@ mammal(tiger1).
 % Rule 7: All elephants are mammals
 mammal(X) :- elephant(X).
 
-fish(nemo).
+shark(nemo).
 fish(sharky).
 
 reptile(slinky).
