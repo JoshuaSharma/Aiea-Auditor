@@ -1,40 +1,78 @@
 from langchain_core.messages import HumanMessage, SystemMessage
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
-import os
-from pyswip import Prolog
-load_dotenv()
 from pyswip import Prolog
 from functions import extract_code
-from langchain_openai import ChatOpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+import os
+
+load_dotenv()
+model = ChatOpenAI(model="gpt-4o")
 prolog = Prolog()
+
+question = input("Ask a question: ")
 first_response = "unknown"
+counter = 0
 
-
-
-
-question = input("Ask a Question")
-model = ChatOpenAI(model = "gpt-4o")
-count = 0
-while ( first_response.lower() == "unknown" and count < 5):
+while first_response.lower() == "unknown" and counter != 5:
     messages = [
-        SystemMessage( "Answer true if the question I ask is a true or false question, answer false if it a ranking question, and unknown if neither"),
-        HumanMessage(question)
+        SystemMessage(content="Answer true if the question I ask is a true or false question, answer false if it a ranking question, and unknown if neither"),
+        HumanMessage(content=question)
     ]
+    response = model.invoke(messages)
+    first_response = response.content.strip()
 
-    classifier = model.invoke(messages)
-    first_response = classifier.content
-    print (first_response)
-    if (first_response.lower() == "unknown"):
-        messages2 = [
-            SystemMessage( "Rewrite the question here: {question}"),
-            HumanMessage(question)
+    if first_response.lower() == "unknown":
+        rewrite_messages = [
+            SystemMessage(content="Rewrite the question"),
+            HumanMessage(content=question)
         ]
-        question = model.invoke(messages2)
-        question = question.content
-        print (question)
-        count += 1
-    
-if (first_response.lower() == "true"):
-    
+        rewritten = model.invoke(rewrite_messages)
+        question = rewritten.content.strip()
+        counter += 1
+
+if counter == 5:
+    print("Error: Cannot classify question")
+else:
+    if first_response.lower() == "true":
+        generate_facts = [
+            SystemMessage(content="You are a helpful assistant that only responds with raw prolog code, including dynamic rules."),
+            HumanMessage(content=f"Can you translate the facts of this query response into prolog: {question}.")
+        ]
+        prolog_code = model.invoke(generate_facts).content
+        with open("prologue.pl", "w") as file:
+            file.write(extract_code(prolog_code))
+
+        prolog.consult("prologue.pl")
+
+        generate_query = [
+            SystemMessage(content="You are a helpful assistant that only responds with raw prolog code, including dynamic rules."),
+            HumanMessage(content=f"Write a query that would answer the question {question} given this prolog file file {prolog_code}.")
+        ]
+        query = model.invoke(generate_query).content.strip()
+        query= query[13:-4]
+        prolog_code = prolog_code[13:-4]
+
+        print (":",query)
+        print (":",prolog_code)
+
+        try:
+            result = list(prolog.query(query))
+            print("true" if result else "false.")
+        except Exception as e:
+            print("Error executing Prolog query:", e)
+
+    else:
+        ranking_reasoning = [
+            SystemMessage(content="You are a helpful assistant that solves ranking puzzles using constraint logic reasoning. "
+                                  "Output the ranking logic constraints and final assignments as Python dictionaries or structured text."),
+            HumanMessage(content=f"Solve this constraint ranking problem and state which option is correct: {question}")
+        ]
+        reasoning = model.invoke(ranking_reasoning).content.strip()
+        print(reasoning)
+
+        extract_answer = [
+            SystemMessage(content="From the reasoning below, output only the correct multiple choice answer (e.g., 'A'):"),
+            HumanMessage(content=reasoning)
+        ]
+        answer = model.invoke(extract_answer).content.strip()
+        print(answer)
