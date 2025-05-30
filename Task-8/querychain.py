@@ -1,13 +1,32 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from langchain_community.document_loaders import TextLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
 from dotenv import load_dotenv
 from pyswip import Prolog
 from functions import extract_code
 import os
 
 load_dotenv()
+
+#os.environ["LANGSMITH_TRACING"] = "true"
+#os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
 model = ChatOpenAI(model="gpt-4o")
 prolog = Prolog()
+
+
+loader = TextLoader("rag.txt")
+docs = loader.load()
+
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+splits = text_splitter.split_documents(docs)
+
+embedding = OpenAIEmbeddings()
+db = FAISS.from_documents(splits, embedding)
+retriever = db.as_retriever()
+
 
 question = input("Ask a question: ")
 first_response = "unknown"
@@ -34,9 +53,12 @@ if counter == 5:
     print("Error: Cannot classify question")
 else:
     if first_response.lower() == "true":
+        relevant_docs = retriever.get_relevant_documents(question)
+        context = "\n".join([doc.page_content for doc in relevant_docs])
+
         generate_facts = [
             SystemMessage(content="You are a helpful assistant that only responds with raw prolog code, including dynamic rules."),
-            HumanMessage(content=f"Can you translate the facts of this query response into prolog: {question}.")
+            HumanMessage(content=f"Can you translate the facts of this query response into prolog with this: {question}, considering the following Prolog facts:\n{context}")
         ]
         prolog_code = model.invoke(generate_facts).content
         with open("prologue.pl", "w") as file:
