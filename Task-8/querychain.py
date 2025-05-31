@@ -6,16 +6,14 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from dotenv import load_dotenv
 from pyswip import Prolog
-from functions import extract_code
 import os
+
+from functions import extract_code
 
 load_dotenv()
 
-#os.environ["LANGSMITH_TRACING"] = "true"
-#os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
 model = ChatOpenAI(model="gpt-4o")
 prolog = Prolog()
-
 
 loader = TextLoader("rag.txt")
 docs = loader.load()
@@ -26,7 +24,6 @@ splits = text_splitter.split_documents(docs)
 embedding = OpenAIEmbeddings()
 db = FAISS.from_documents(splits, embedding)
 retriever = db.as_retriever()
-
 
 question = input("Ask a question: ")
 first_response = "unknown"
@@ -58,11 +55,13 @@ else:
 
         generate_facts = [
             SystemMessage(content="You are a helpful assistant that only responds with raw prolog code, including dynamic rules."),
-            HumanMessage(content=f"Can you translate the facts of this query response into prolog with this: {question}, considering the following Prolog facts:\n{context}")
+            HumanMessage(content=f"Can you translate the facts of this query response into prolog with this: {question}, considering the following Prolog facts:\n{context}, put period at the end of every prolog query")
         ]
         prolog_code = model.invoke(generate_facts).content
+        final_code = extract_code(prolog_code)
+
         with open("prologue.pl", "w") as file:
-            file.write(extract_code(prolog_code))
+            file.write(final_code)
 
         prolog.consult("prologue.pl")
 
@@ -70,12 +69,10 @@ else:
             SystemMessage(content="You are a helpful assistant that only responds with raw prolog code, including dynamic rules."),
             HumanMessage(content=f"Write a query that would answer the question {question} given this prolog file file {prolog_code}.")
         ]
-        query = model.invoke(generate_query).content.strip()
-        query= query[13:-4]
-        prolog_code = prolog_code[13:-4]
+        query = extract_code(model.invoke(generate_query).content.strip())
 
-        print (":",query)
-        print (":",prolog_code)
+        print(":--", query)
+        print(":==", final_code)
 
         try:
             result = list(prolog.query(query))
@@ -84,17 +81,15 @@ else:
             print("Error executing Prolog query:", e)
 
     else:
-        ranking_reasoning = [
-            SystemMessage(content="You are a helpful assistant that solves ranking puzzles using constraint logic reasoning. "
-                                  "Output the ranking logic constraints and final assignments as Python dictionaries or structured text."),
-            HumanMessage(content=f"Solve this constraint ranking problem and state which option is correct: {question}")
-        ]
-        reasoning = model.invoke(ranking_reasoning).content.strip()
-        print(reasoning)
+        reasoning = model.invoke([
+            SystemMessage(content="You are a helpful assistant that solves ranking puzzles using constraint logic reasoning."),
+            HumanMessage(content=question)
+        ]).content.strip()
 
-        extract_answer = [
+        answer = model.invoke([
             SystemMessage(content="From the reasoning below, output only the correct multiple choice answer (e.g., 'A'):"),
             HumanMessage(content=reasoning)
-        ]
-        answer = model.invoke(extract_answer).content.strip()
+        ]).content.strip()
+
+        print(reasoning)
         print(answer)
