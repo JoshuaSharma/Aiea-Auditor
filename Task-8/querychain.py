@@ -87,7 +87,7 @@ else:
         ]).content.strip()
 
         answer = model.invoke([
-            SystemMessage(content="From the reasoning below, output only the correct multiple choice answer (e.g., 'A'):"),
+            SystemMessage(content="From the reasoning below, output only the correct multiple choice answer (e.g., 'A') and consider this {context}:"),
             HumanMessage(content=reasoning)
         ]).content.strip()
 
