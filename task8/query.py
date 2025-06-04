@@ -10,7 +10,6 @@ from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain.chains import RetrievalQA
 
-
 # manuel RAG
 def retrieve_relevant_kb(question, kb_file="animals_kb.pl"):
 
@@ -33,6 +32,8 @@ def retrieve_relevant_kb(question, kb_file="animals_kb.pl"):
 
 # langchain RAG
 def retrieve_relevant_context_with_rag(question, kb_file="animals_kb.pl"):
+
+
     # Load and split KB
     loader = TextLoader(kb_file)
     docs = loader.load()
@@ -84,7 +85,7 @@ def main():
             "You are a helpful assistant that outputs raw Prolog code from this question: {question}"
         )
 
-        # this doesn't use the facts in database but asking for Chatgpt 
+        # this doesn't use the facts in database but asking for Chatgpt directly without context
         # an good example is ask something that's not true in general but true 
         # according to knowledge base to test out
         # facts = llm.invoke(facts_prompt.format(question=question)).content
