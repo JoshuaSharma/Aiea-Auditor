@@ -23,11 +23,6 @@ male(bob).
 male(charlie).
 male(frank).
 
-% Species classification
-animal(dog).
-canine(dog).
-species(dog, canine).
-
 % --- Rules ---
 
 % Rule: X is a mother of Y if X is a parent and female
@@ -45,9 +40,6 @@ child(X, Y) :- parent(Y, X).
 % Rule: X likes healthy food
 healthy_food(salad).
 likes_healthy(X) :- likes(X, Y), healthy_food(Y).
-
-% Rule: Check if a specific species is a canine
-is_canine(Species) :- canine(Species).
 
 % --- Weird Rule ---
 
