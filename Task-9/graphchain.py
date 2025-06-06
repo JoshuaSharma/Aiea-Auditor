@@ -66,9 +66,9 @@ def translate_to_prolog(state: State) -> State:
     state["context"] = context
     print("facts")
     generate_facts = [
-        SystemMessage(content="You are a helpful assistant that only responds with raw Prolog code (no comments), including dynamic rules."),
-        HumanMessage(content=f"Translate the facts in this query into valid Prolog using these:\n{context}\nQuestion: {state['question']}")
-    ]
+    SystemMessage(content="You are a helpful assistant that generates Prolog facts and rules. Create predicates that can answer the given question. Only respond with raw Prolog code (no comments). Include both facts and rules as needed."),
+    HumanMessage(content=f"Generate Prolog facts and rules to answer this question: {state['question']}\n\nUse this context if relevant: {context}")
+]
     prolog_code_raw = model.invoke(generate_facts).content
     state["prolog_code"] = extract_code(prolog_code_raw)
 
@@ -82,9 +82,9 @@ def translate_to_prolog(state: State) -> State:
         return state
     print("query")
     generate_query = [
-        SystemMessage(content="Only return a valid Prolog query (e.g. `color(sky, blue).`). No `?-`, no explanation."),
-        HumanMessage(content=f"Write a query that would answer the question: {state['question']}.\nProlog code: {state['prolog_code']}")
-    ]
+    SystemMessage(content="Generate a Prolog query that uses the predicates defined in the knowledge base. Only return the query (e.g. `animal(dog).`), no `?-`, no explanation, no extra text."),
+    HumanMessage(content=f"Write a Prolog query to answer: {state['question']}\n\nBased on this Prolog knowledge base:\n{state['prolog_code']}")
+]
     raw_query = model.invoke(generate_query).content.strip()
     state["query"] = extract_code(raw_query)
 
