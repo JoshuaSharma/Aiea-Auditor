@@ -42,6 +42,7 @@ def classify_question(state):
         "Answer 'true' if the question is a yes/no question, 'false' if it is a ranking/constraint puzzle, and 'unknown' otherwise.\n\nQuestion: {question}"
     )
     classification = llm.invoke(prompt.format(question=question)).content.strip().lower()
+    print("classifiction: ", classification)
 
     attempts = 0
     while classification == "unknown" and attempts < 5:
@@ -94,8 +95,27 @@ def true_branch(state):
     "Question: {question}\n\nKnowledge base:\n{kb}"
     )
 
+
+
     query_raw = llm.invoke(query_prompt.format(question=question, kb=facts)).content
     query = extract_code(query_raw).replace("?-", "").replace(".", "").strip()
+
+
+    # Self-refinement 
+    refine_prompt = PromptTemplate.from_template(
+        "Here is a question, a knowledge base, and a proposed Prolog query:\n\n"
+        "Question: {question}\nKnowledge base:\n{kb}\n\n"
+        "Initial Prolog query: {query}\n\n"
+        "Reflect step-by-step: is this the correct Prolog query to answer the question? "
+        "If not, suggest a revised version. Output only the revised query as a single line. "
+        "If the initial query is already good, return it unchanged."
+    )
+    refined_query_raw = llm.invoke(
+        refine_prompt.format(question=question, kb=facts, query=query)
+    ).content
+    refined_query = extract_code(refined_query_raw).replace("?-", "").replace(".", "").strip()
+
+    print(f"Refined Prolog query: {refined_query}")
 
     prolog = Prolog()
     prolog.consult("animals_kb.pl")
@@ -112,30 +132,30 @@ def true_branch(state):
 
 # ranking quesiton 
 def false_branch(state):
-
-    print("false_branch")
     question = state["question"]
     llm = state["llm"]
 
     reasoning_prompt = PromptTemplate.from_template(
-        "You are a helpful assistant that solves logic puzzles using constraint logic reasoning. "
-        "For this ranking problem, output the reasoning and answer as a Python dictionary:\n\n{question}"
+        "You are a helpful assistant that solves logic puzzles or ranking problems. "
+        "For the question below, provide a ranked list of the items involved (e.g., largest to smallest) "
+        "and explain your reasoning in 2-3 sentences.\n\n"
+        "Question: {question}"
     )
+
     reasoning = llm.invoke(reasoning_prompt.format(question=question)).content
 
-    answer_prompt = PromptTemplate.from_template(
-        "From the reasoning below, extract only the correct multiple choice answer (e.g., 'A'):\n\n{reasoning}"
-    )
-    answer = llm.invoke(answer_prompt.format(reasoning=reasoning)).content.strip()
-
-    state["reasoning"] = reasoning
-    state["result"] = answer
+    # Save the entire explanation with the ranked output
+    state["result"] = reasoning
     return state
 
 
 def route(state):
-    print("Routing based on:", state["classification"])
-    return {**state, "__branch__": state["classification"]}
+    if state["classification"] == "true":
+        return "true_branch"
+    elif state["classification"] == "false":
+        return "false_branch"
+    else:
+        return END
 
 
 def build_graph():
@@ -146,13 +166,13 @@ def build_graph():
     builder.add_node("true_branch", true_branch)
     builder.add_node("false_branch", false_branch)
 
-    builder.set_entry_point("classify")
-    builder.add_edge("classify", "true_branch")
 
-    # builder.add_conditional_edges("classify",route, {
-    #     "true": "true_branch",
-    #     "false": "false_branch",
-    # })
+    builder.set_entry_point("classify")
+
+    
+    # builder.add_edge("classify", "true_branch")
+
+    builder.add_conditional_edges("classify", route)
 
 
     builder.add_edge("true_branch", END)
