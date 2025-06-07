@@ -65,13 +65,33 @@ def translate_to_prolog(state: State) -> State:
     context = "\n".join([doc.page_content for doc in relevant_docs])
     state["context"] = context
     print("facts")
-    generate_facts = [
-    SystemMessage(content="You are a helpful assistant that generates Prolog facts and rules. Create predicates that can answer the given question. Only respond with raw Prolog code (no comments). Include both facts and rules as needed."),
-    HumanMessage(content=f"Generate Prolog facts and rules to answer this question: {state['question']}\n\nUse this context if relevant: {context}")
-]
-    prolog_code_raw = model.invoke(generate_facts).content
-    state["prolog_code"] = extract_code(prolog_code_raw)
 
+    def generate_prolog_code(prompt_modifier=""):
+        messages = [
+            SystemMessage(content=f"""
+You are an expert Prolog fact generator. Only write the **minimum** set of facts and rules necessary to determine the truth of a question like: "{state['question']}". 
+Do not include unrelated facts like `animal(dog).` unless they directly support the claim.
+Use only predicates that are relevant to answering the question. Do not explain.
+Output only valid Prolog code.
+{prompt_modifier}
+"""),
+            HumanMessage(content=f"Context:\n{context}")
+        ]
+        return extract_code(model.invoke(messages).content)
+
+    def generate_query_code(prompt_modifier=""):
+        messages = [
+            SystemMessage(content=f"""
+Generate a **single Prolog query** that answers the question: "{state['question']}" using the facts provided. 
+It must return true if the statement is true and false otherwise. 
+Return only valid Prolog, no `?-`, no explanation, no punctuation. 
+{prompt_modifier}
+"""),
+            HumanMessage(content=f"Use these facts:\n{state['prolog_code']}")
+        ]
+        return extract_code(model.invoke(messages).content.strip())
+
+    state["prolog_code"] = generate_prolog_code()
     with open("prologue.pl", "w") as file:
         file.write(state["prolog_code"])
 
@@ -80,71 +100,57 @@ def translate_to_prolog(state: State) -> State:
     except Exception as e:
         state["result"] = f"Error consulting Prolog file: {e}"
         return state
+
     print("query")
-    generate_query = [
-    SystemMessage(content="Generate a Prolog query that uses the predicates defined in the knowledge base. Only return the query (e.g. `animal(dog).`), no `?-`, no explanation, no extra text."),
-    HumanMessage(content=f"Write a Prolog query to answer: {state['question']}\n\nBased on this Prolog knowledge base:\n{state['prolog_code']}")
-]
-    raw_query = model.invoke(generate_query).content.strip()
-    state["query"] = extract_code(raw_query)
-
-
+    state["query"] = generate_query_code()
 
     try:
         result = list(prolog.query(state["query"]))
         state["result"] = "true" if result else "false"
     except Exception as e:
-        state["result"] = f"Error executing Prolog query: {e}"
+        print("Self-refinement triggered")
+        state["prolog_code"] = generate_prolog_code("Be stricter. Only define what is needed to answer the question.")
+        with open("prologue.pl", "w") as file:
+            file.write(state["prolog_code"])
+        try:
+            prolog.consult("prologue.pl")
+        except Exception as e2:
+            state["result"] = f"Error after retry: {e2}"
+            return state
+
+        state["query"] = generate_query_code("Be precise. Make sure the query expresses the full claim.")
+        try:
+            result = list(prolog.query(state["query"]))
+            state["result"] = "true" if result else "false"
+        except Exception as e3:
+            state["result"] = f"Refined query failed: {e3}"
 
     return state
 
-'''def translate_to_prolog(state: State) -> State:
-    relevant_docs = retriever.get_relevant_documents(state["question"])
-    context = "\n".join([doc.page_content for doc in relevant_docs])
-    state["context"] = context
 
-    generate_facts = [
-        SystemMessage(content="You are a helpful assistant that only responds with raw Prolog code (no comments), including dynamic rules."),
-        HumanMessage(content=f"Translate the facts in this query into valid Prolog using these:\n{context}\nQuestion: {state['question']}")
-    ]
-    prolog_code_raw = model.invoke(generate_facts).content
-    state["prolog_code"] = extract_code(prolog_code_raw)
+def judge_context(state: State) -> State:
+    judgment = model.invoke([
+        SystemMessage(content="Is the following context relevant to answering the given question? Respond only with 'yes' or 'no'."),
+        HumanMessage(content=f"Question:\n{state['question']}\n\nContext:\n{state['context']}")
+    ]).content.strip().lower()
 
-    with open("prologue.pl", "w") as file:
-        file.write(state["prolog_code"])
-    try:
-        prolog.consult("prologue.pl")
-    except:
-        state["result"] = "Error running prolog"
-        return state
-    
-    questionquery = [
-        SystemMessage(content="Only return a valid Prolog query (e.g. `color(sky, blue).`). No `?-`, no explanation."),
-        HumanMessage(content=f"Write a query that would answer the question {question} given this prolog file file {prolog_code}.")
-    ]
-    raw_query = model.invoke(generate_query).content.strip()
-    state["query"] = extract_code(raw_query)
-
-    try:
-        result = list(prolog.query(state["query"]))
-        state["result"] = "true" if result else "false"
-    except:
-        state["result"] = "query error"
-    return state'''
+    if "no" in judgment:
+        state["error"] = "Irrelevant context detected. Cannot proceed with translation."
+    return state
 
 def solve_ranking(state: State) -> State:
     context = state.get("context", "")
     reasoning = model.invoke([
-        SystemMessage(content="You are a helpful assistant that solves ranking puzzles using constraint logic reasoning."),
-        HumanMessage(content=state["question"])
+        SystemMessage(content="Solve this ranking question step-by-step using reasoning."),
+        HumanMessage(content=f"Question:\n{state['question']}\n\nContext:\n{context}")
     ]).content.strip()
 
     answer = model.invoke([
-        SystemMessage(content=f"From the reasoning below, output only the correct multiple choice answer (e.g., 'A') and consider this {context}:"),
+        SystemMessage(content="Only output the final answer to the question, like 'A', 'B', etc. Do not explain."),
         HumanMessage(content=reasoning)
     ]).content.strip()
 
-    state["result"] = f"{reasoning}\n{answer}"
+    state["result"] = f"{reasoning}\nAnswer: {answer}"
     return state
 
 def route(state: State):
@@ -161,11 +167,13 @@ builder = StateGraph(State)
 builder.add_node("classify", classify_question)
 builder.add_node("rewrite", rewrite_question)
 builder.add_node("translate", translate_to_prolog)
+builder.add_node("judge_context", judge_context)
 builder.add_node("ranking", solve_ranking)
 builder.set_entry_point("classify")
 builder.add_conditional_edges("classify", route)
 builder.add_edge("rewrite", "classify")
-builder.add_edge("translate", END)
+builder.add_edge("translate", "judge_context")
+builder.add_edge("judge_context", END)
 builder.add_edge("ranking", END)
 
 app = builder.compile()
